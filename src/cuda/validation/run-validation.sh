@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# run-validation.sh — reproduce the CUDA hardware-validation evidence on a
+# run-validation.sh: reproduce the CUDA hardware-validation evidence on a
 # Blackwell (sm_120) card. Compiles the two standalone parity harnesses with
 # nvcc and runs each under compute-sanitizer. Every section prints the exact
 # command before running it, so the captured output is self-documenting.
@@ -16,7 +16,7 @@ ARCH="${ARCH:-sm_120}"
 run() { echo; echo "\$ $*"; eval "$*"; echo "  (exit=$?)"; }
 
 echo "######################################################################"
-echo "# CUDA hardware validation — raw command output"
+echo "# CUDA hardware validation: raw command output"
 echo "# host: $(hostname)   date: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 echo "######################################################################"
 
@@ -44,11 +44,11 @@ echo; echo "===== 5. compute-sanitizer memcheck (scanner kernel) ====="
 run "compute-sanitizer --tool memcheck ./sha_test 2>&1 | grep -E 'ERROR SUMMARY|invalid|leak|misaligned|out-of'"
 
 echo; echo "===== 6. compute-sanitizer racecheck (matmul shared-mem tree-reduction) ====="
-echo "# FusedOrig/FusedNew are the only kernels that declare __shared__ (partials[]),"
-echo "# so racecheck is scoped to them with --kernel-name kns=Fused. Instrumenting the"
-echo "# full 2M-element workload exceeds racecheck's access-record tracker; the"
-echo "# shared-memory kernels are what racecheck exists to check."
-run "compute-sanitizer --tool racecheck --kernel-name kns=Fused stdbuf -oL -eL ./matmul_test 2>&1 | grep -E 'RACECHECK SUMMARY|hazard|ALL PASS|returned an error'"
+echo "# BTX_VAL_NO_PERF=1 skips the timing loop (benchmarking under a sanitizer is meaningless,"
+echo "# and its ~120 shared-mem kernel re-launches overrun racecheck's access-record tracker)."
+echo "# racecheck then runs the full parity section, which exercises every kernel once including"
+echo "# both shared-memory reductions (FusedOrig/FusedNew, the only kernels that declare __shared__)."
+run "BTX_VAL_NO_PERF=1 compute-sanitizer --tool racecheck stdbuf -oL -eL ./matmul_test 2>&1 | grep -E 'RACECHECK SUMMARY|hazard|ALL PASS|returned an error'"
 
 echo; echo "######################################################################"
 echo "# done"

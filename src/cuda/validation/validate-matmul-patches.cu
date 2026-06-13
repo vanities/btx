@@ -1,8 +1,8 @@
 // Byte-exact + throughput validation for the two matmul_accel.cu patches:
-//   sha-windowed-matrixgen.patch  — windowed SHA in the per-candidate matrix gen
-//   fused-single-reduction.patch  — single block reduction in non-prefix fused kernel
+//   sha-windowed-matrixgen.patch  - windowed SHA in the per-candidate matrix gen
+//   fused-single-reduction.patch  - single block reduction in non-prefix fused kernel
 // Orig* = verbatim 0.32.3 (the consensus reference). New* = patched logic.
-// PASS iff outputs are byte-identical — CONSENSUS-CRITICAL: re-run (expect PASS)
+// PASS iff outputs are byte-identical - CONSENSUS-CRITICAL: re-run (expect PASS)
 // whenever the patches are re-derived against a new BTX version, BEFORE trusting them.
 // The fused test additionally cross-checks BOTH kernels against a CPU reference.
 //   run:   nvcc -arch=sm_120 -O3 -o matmul_test validate-matmul-patches.cu && ./matmul_test
@@ -392,6 +392,11 @@ int main(){
     if(mism) return 1;
 
     // ================= throughput (contended w/ live miner; ratio is the signal) =================
+    // Skipped when BTX_VAL_NO_PERF is set: benchmarking under a sanitizer (e.g. racecheck) is
+    // meaningless, and this timing loop's ~120 shared-mem kernel re-launches overrun racecheck's
+    // access-record tracker. The parity section above already exercises every kernel once,
+    // including both shared-memory reductions (FusedOrig/FusedNew), so racecheck stays complete.
+    if(!getenv("BTX_VAL_NO_PERF")){
     cudaEvent_t s,e; CK(cudaEventCreate(&s)); CK(cudaEventCreate(&e)); float ms;
     printf("\nkernel              orig(ms)    new(ms)   speedup\n");
     for(int r=0;r<3;++r){
@@ -418,6 +423,7 @@ int main(){
         CK(cudaEventElapsedTime(&ms,s,e)); const double ff=ms/FI;
         printf("factored[%d]     %10.3f %10.3f  %+7.1f%%   (col1=fused-new, col2=factored K1+K2)\n",r,fn,ff,(fn/ff-1.0)*100.0);
     }
+    } // end BTX_VAL_NO_PERF gate
     printf("\nALL PASS\n");
     return 0;
 }

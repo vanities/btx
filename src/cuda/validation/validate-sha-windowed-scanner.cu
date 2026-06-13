@@ -1,6 +1,6 @@
 // Byte-exact + throughput validation for sha-windowed-scanner.patch.
 // ScanOrig = verbatim 0.32.3 (w[64], the consensus reference). ScanWin = windowed (m[16]).
-// PASS iff every nonce's sigma is byte-identical between the two — CONSENSUS-CRITICAL:
+// PASS iff every nonce's sigma is byte-identical between the two - CONSENSUS-CRITICAL:
 // re-run this (expect PASS) whenever the patch is re-derived against a new BTX version,
 // BEFORE trusting it. The throughput table should show ScanWin ~2x ScanOrig.
 //   run:   nvcc -arch=sm_120 -O3 -o sha_test validate-sha-windowed-scanner.cu && ./sha_test
