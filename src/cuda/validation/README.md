@@ -31,7 +31,7 @@ bash run-validation.sh 2>&1 | tee raw-output.txt
 ```
 
 racecheck runs the full parity section with `BTX_VAL_NO_PERF=1`, which skips the
-timing loop (benchmarking under a sanitizer is meaningless, and its ~120
-shared-mem kernel re-launches would otherwise overrun racecheck's access-record
-tracker). `FusedOrig`/`FusedNew` are the only kernels that declare `__shared__`,
-and the parity section exercises them.
+timing loop. Benchmarking under a sanitizer isn't representative (instrumentation
+inflates and distorts timing), and the loop's ~120 shared-mem kernel re-launches
+would otherwise overrun racecheck's access-record tracker. `FusedOrig`/`FusedNew`
+are the only kernels that declare `__shared__`, and the parity section exercises them.

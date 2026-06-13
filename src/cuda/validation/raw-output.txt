@@ -89,10 +89,10 @@ $ compute-sanitizer --tool memcheck ./sha_test 2>&1 | grep -E 'ERROR SUMMARY|inv
   (exit=0)
 
 ===== 6. compute-sanitizer racecheck (matmul shared-mem tree-reduction) =====
-# BTX_VAL_NO_PERF=1 skips the timing loop (benchmarking under a sanitizer is meaningless,
-# and its ~120 shared-mem kernel re-launches overrun racecheck's access-record tracker).
-# racecheck then runs the full parity section, which exercises every kernel once including
-# both shared-memory reductions (FusedOrig/FusedNew, the only kernels that declare __shared__).
+# BTX_VAL_NO_PERF=1 skips the timing loop: benchmarking under a sanitizer isn't representative
+# (instrumentation inflates and distorts timing), and its ~120 shared-mem kernel re-launches
+# would overrun racecheck's access-record tracker. racecheck then runs the full parity section,
+# exercising every kernel once including FusedOrig/FusedNew (the only kernels declaring __shared__).
 
 $ BTX_VAL_NO_PERF=1 compute-sanitizer --tool racecheck stdbuf -oL -eL ./matmul_test 2>&1 | grep -E 'RACECHECK SUMMARY|hazard|ALL PASS|returned an error'
 ALL PASS

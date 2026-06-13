@@ -392,10 +392,11 @@ int main(){
     if(mism) return 1;
 
     // ================= throughput (contended w/ live miner; ratio is the signal) =================
-    // Skipped when BTX_VAL_NO_PERF is set: benchmarking under a sanitizer (e.g. racecheck) is
-    // meaningless, and this timing loop's ~120 shared-mem kernel re-launches overrun racecheck's
-    // access-record tracker. The parity section above already exercises every kernel once,
-    // including both shared-memory reductions (FusedOrig/FusedNew), so racecheck stays complete.
+    // Skipped when BTX_VAL_NO_PERF is set: benchmarking under a sanitizer (e.g. racecheck) isn't
+    // representative (instrumentation inflates and distorts timing), and this timing loop's ~120
+    // shared-mem kernel re-launches overrun racecheck's access-record tracker. The parity section
+    // above already exercises every kernel once, including both shared-memory reductions
+    // (FusedOrig/FusedNew), so racecheck stays complete.
     if(!getenv("BTX_VAL_NO_PERF")){
     cudaEvent_t s,e; CK(cudaEventCreate(&s)); CK(cudaEventCreate(&e)); float ms;
     printf("\nkernel              orig(ms)    new(ms)   speedup\n");
