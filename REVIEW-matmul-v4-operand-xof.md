@@ -1,6 +1,6 @@
 # MatMul v4 (BTX PR #89): the reference operand XOF makes mining SHA-256-bound
 
-**Status:** independent technical review of `btxchain/btx` PR #89 (RFC, mainnet-disabled).
+**Status:** independent technical review of `btxchain/btx` PR #89 (RFC).
 **Date:** 2026-07-15.
 **Scope:** performance and mining-incentive analysis of the reference implementation as written. This is not a consensus-safety claim: the design is deterministic and, as measured below, bit-exact across CPU and GPU.
 
@@ -179,6 +179,5 @@ Measurements above are from an RTX 5090 (single process) and an Apple M4 Max (CP
 
 ## Caveats and scope
 
-- The PR is an RFC with mainnet activation deliberately unset, which is the right time to surface this.
 - This is a performance and incentive finding, not a correctness or consensus-safety bug. The v4 arithmetic is deterministic and bit-exact across the CPU reference and an independent GPU implementation, as validated above.
 - The absolute nonce/s figures come from a first-cut GPU implementation; a tuned miner would raise throughput and lower the SHA share somewhat. It would not change the conclusion: SHA operand-gen would need to become roughly 40x cheaper to stop dominating, and since it is fixed per-element work, the only way to achieve that is to change the operand XOF in consensus (the remediation above), not to optimize the miner.
