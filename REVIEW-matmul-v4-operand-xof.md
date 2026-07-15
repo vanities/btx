@@ -126,6 +126,30 @@ None of this affects the verification design (Freivalds over q), the digest form
 
 ---
 
+## Update: widening the XOF is necessary but not sufficient
+
+Building a cross-hardware benchmark (both XOF variants, per-stage timing, board power) surfaced a second issue. Widening the XOF removes the SHA bottleneck, but the per-nonce cost then moves to the mod-q sketch combine (`Chat = P*Q` over `q = 2^61-1`), which also runs on integer ALU, not tensor cores. The INT8 tensor GEMM never rises above about 6% of per-nonce work in any configuration measured (n = 4096 or 8192, legacy or wide XOF, on an RTX 5090 and an H100).
+
+Measured stage split (RTX 5090, n=4096):
+
+| XOF | operand-gen (SHA) | INT8 matmul | mod-q combine |
+|---|---|---|---|
+| legacy (per element) | 62.9% | 1.6% | 35.5% |
+| wide | 23.5% | 3.7% | 72.8% |
+
+The structural reason: the sketch enforces only `2*n^2*m` INT8 MACs (the optimal miner evaluates `(U*A)(B*V)` directly, per section 0.7-(3)), which on tensor cores is about 0.06 ms at n=4096, a rounding error next to the XOF (order `n^2`) and the mod-q combine (`n*m^2` 61-bit modular multiplies on integer ALU). No commit tile `b` fixes it: the combine-to-GEMM time ratio scales like `363/(2b)` on this hardware, so INT8 only overtakes the combine at `b > 180`, where the GEMM itself has shrunk to nothing. Making the INT8 GEMM dominant appears to require the full-C profile (enforce the full `n^3` product), which the sketch was chosen to avoid for payload and verification cost. That is a real tension between cheap verification (sketch) and being INT8-compute-bound (full-C).
+
+Cross-hardware check (H100 SXM vs RTX 5090, both bit-exact to the reference digest, which also confirms cross-architecture determinism across sm_90 and sm_120):
+
+| card | n=4096 legacy | n=4096 wide |
+|---|---|---|
+| RTX 5090 (consumer) | 261 nonce/s | 534 nonce/s |
+| H100 SXM (datacenter) | 92 nonce/s | 151 nonce/s |
+
+With these first-cut kernels the H100 is about 2.8x slower per card, because most of the work is on the integer and memory paths where the 5090's higher clocks win, and the INT8 slice the H100 would dominate is too small to matter. Caveats worth stating up front: the combine kernel is naive, and the H100's higher HBM bandwidth could recover some of the gap with a bandwidth-tuned combine; the tall-skinny INT8 GEMM was also not tuned per architecture. The kernel-independent point still stands, since cuBLASLt is near-optimal for the GEMM and it is still under 6% of the work: the datacenter INT8 advantage cannot express while the enforced tensor work stays at `2*n^2*m`.
+
+Net: a wide XOF is still worth doing, since it removes an ASIC-friendly SHA bottleneck, but on its own it does not make v4 compute-bound on INT8 or make datacenter parts win. That likely needs a different work-binding than the sketch.
+
 ## Behavior as difficulty rises
 
 v4's per-nonce work is independent of difficulty. The mining loop (`SolveMatMulV4`, `src/pow.cpp`) fixes the matrix dimension to the consensus constant `nMatMulV4Dimension` (4096), computes the full digest for every nonce with no pre-hash gate, and accepts a nonce if and only if `digest <= target`. Difficulty, via `nBits` to target, changes only the acceptance threshold, not the amount of work per nonce.
