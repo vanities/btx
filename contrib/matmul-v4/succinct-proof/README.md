@@ -94,12 +94,28 @@ having any chain-size consequence at all. A natural path is to ship segregation
 first and introduce the succinct proof as a later upgrade that reuses the same
 header commitment slot (matmul_digest becomes the polynomial commitment).
 
+## Adversarial cost
+
+Can a miner pass while doing less compute? `adversarial_cost.py` prices every
+known strategy and the tests assert none beats honest mining. Partial compute
+(garbage-fill a fraction e of entries) loses exponentially: Q=34 sampled
+openings accept with (1-e)^Q while the savings are linear, so skipping 1% of
+the sketch already costs 1.4x honest per accepted block, 10% costs ~35x, and
+the curve never turns profitable. The acceptance model is verified against an
+actual Merkle commitment with root-derived query sampling, not just the
+formula. Garbage-commit scanning is Schwartz-Zippel-priced at ~2^-49 per
+round against a nonce-throughput speedup bounded by ~2^30, and challenge
+grinding costs ~10^11 honest blocks per success. Two implementation MUSTs
+fall out: the commitment stays in the header hash as the per-nonce
+eligibility gate, and the PCS admits no free re-randomization.
+
 ## Run
 
 ```
 python3 succinct_matmul_pow.py   # self-check + decoupling table
-python3 test_succinct.py         # 16 tests: completeness, soundness, binding,
-                                 # decoupling, verifier-cost (no O(n^3) on verify)
+python3 adversarial_cost.py      # adversarial cost table (modeled + sampled)
+python3 test_succinct.py         # 23 tests: completeness, soundness, binding,
+                                 # decoupling, verifier-cost, adversarial cost
 ```
 
 No dependencies beyond the Python standard library.

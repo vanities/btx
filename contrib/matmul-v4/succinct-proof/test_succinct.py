@@ -18,6 +18,11 @@
 #       8*m^2); profile D shrinks >100x under the conservative FRI estimate.
 #   (f) VERIFIER COST: the O(n^3) matmul path is never executed on verify
 #       (enforced by making it explode).
+#   (g) ADVERSARIAL COST: no cheating strategy beats honest mining. Partial
+#       compute loses exponentially (Q sampled queries vs linear savings,
+#       measured against a real Merkle sampler, not just the formula);
+#       garbage-commit scanning and challenge grinding are priced out by
+#       Schwartz-Zippel even at theoretical-limit speedups.
 #   + GOLDEN vectors: pinned commitment/challenge/value hex at fixed
 #     headers, so any silent change to operand gen, Fiat-Shamir, or the
 #     evaluation fails loudly.
@@ -219,6 +224,48 @@ def test_soundness_margin_schwartz_zippel():
     # Two rounds (independent challenges) or one extension-field round clears
     # any realistic PoW grinding budget: 2^-98 vs a hash-of-sketch cost per try.
     assert per_round ** 2 < 2 ** -98
+
+
+# ---------------------------------------------------------------------------
+# (g) ADVERSARIAL COST
+# ---------------------------------------------------------------------------
+def test_partial_compute_never_profitable():
+    import adversarial_cost as ac
+    w = ac.work_shares(4096, 2048)   # profile D
+    for save_share in (w["combine_share"], w["proj_p_share"]):
+        prev = 1.0
+        for eps in (0.01, 0.02, 0.05, 0.10, 0.25, 0.50, 0.75):
+            ratio = ac.partial_compute_cost_ratio(eps, save_share)
+            assert ratio > 1.0, f"profitable skip at eps={eps} share={save_share}"
+            assert ratio > prev, "cost must worsen monotonically with eps"
+            prev = ratio
+    # marginal condition at eps->0: d/deps = Q - save_share > 0 for any share <= 1
+    assert ac.Q_QUERIES > 1.0
+
+
+def test_partial_compute_acceptance_matches_sampling():
+    # The (1-e)^Q model is verified against an actual Merkle commitment with
+    # root-derived query sampling (deterministic trials), not assumed.
+    import adversarial_cost as ac
+    for eps in (0.05, 0.15):
+        measured, predicted = ac.empirical_acceptance(eps, domain=1024, trials=1200)
+        assert abs(measured - predicted) < 0.03, \
+            f"eps={eps}: measured {measured:.4f} vs predicted {predicted:.4f}"
+
+
+def test_garbage_commit_unprofitable_at_limit_speedup():
+    import adversarial_cost as ac
+    # Even granting the theoretical-limit nonce-throughput speedup (2^30) from
+    # skipping the matmul entirely, one SZ round leaves the cheater >30,000x
+    # less efficient than honest; a second round is astronomical.
+    assert ac.garbage_commit_efficiency(2 ** 30, 2048, rounds=1) < 2 ** -15
+    assert ac.garbage_commit_efficiency(2 ** 30, 2048, rounds=2) < 2 ** -60
+
+
+def test_challenge_grinding_unprofitable():
+    import adversarial_cost as ac
+    # Each grind costs at least the O(n^2) scalar; expected grinds 1/sz.
+    assert ac.grinding_cost_ratio(4096, 2048) > 2 ** 30
 
 
 # ---------------------------------------------------------------------------
