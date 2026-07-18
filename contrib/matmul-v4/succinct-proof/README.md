@@ -105,9 +105,36 @@ the curve never turns profitable. The acceptance model is verified against an
 actual Merkle commitment with root-derived query sampling, not just the
 formula. Garbage-commit scanning is Schwartz-Zippel-priced at ~2^-49 per
 round against a nonce-throughput speedup bounded by ~2^30, and challenge
-grinding costs ~10^11 honest blocks per success. Two implementation MUSTs
+grinding costs ~10^11 honest blocks per success. Three implementation MUSTs
 fall out: the commitment stays in the header hash as the per-nonce
-eligibility gate, and the PCS admits no free re-randomization.
+eligibility gate; the PCS admits no free re-randomization; and the
+commitment must bind EXACTLY to the coefficients (below).
+
+## Digest uniqueness: the exact-binding requirement
+
+Today's design has an unstated load-bearing property: per nonce there is
+exactly ONE valid digest value (the hash of the exact true sketch, enforced
+by exact Freivalds over the full payload). That uniqueness is what makes
+eligibility tries cost matmuls. A succinct scheme must preserve it, and the
+choice of commitment basis decides whether it does:
+
+- Evaluation-domain commitments (the textbook LDE-FRI flavor) are
+  proximity-decoded: a single twiddled leaf stays within decoding radius of
+  the true polynomial, the opening decodes the twiddle away, the identity
+  check passes on the decoded value, and ~34 queries miss one position in
+  millions. A miner could then compute ONE sketch and grind eligibility by
+  twiddling leaves at Merkle-update speed. That is a PoW break, not a
+  discount.
+- Coefficient-basis commitments close it: every change to committed data IS
+  a different polynomial, so the Fiat-Shamir identity catches any twiddle at
+  the Schwartz-Zippel bound and ground twiddles only produce invalid blocks
+  (the single-entry-perturbation test in this reference is exactly that
+  catch). Exact-binding algebraic PCS constructions (lattice-based
+  Greyhound-class) have the same property.
+
+So the coefficient-root flavor is not just the cheaper per-nonce shape; it
+is the SOUND one. The production requirement: evaluation claims must bind to
+the committed leaves themselves, never to a decoded nearby codeword.
 
 ## Run
 
