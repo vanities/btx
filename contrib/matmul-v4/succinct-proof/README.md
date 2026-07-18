@@ -136,6 +136,24 @@ So the coefficient-root flavor is not just the cheaper per-nonce shape; it
 is the SOUND one. The production requirement: evaluation claims must bind to
 the committed leaves themselves, never to a decoded nearby codeword.
 
+One sharpening: exactness is a property of the commitment's BINDING, not the
+basis alone (this reference is exact because IdealPC is exact by
+construction). Any hash-based PCS commits to an encoding with redundancy, so
+many commitment strings open as the same polynomial. Fiat-Shamir folding
+does force a full proof regeneration per grind try, capping the twiddle
+speedup near 10-20x instead of 2^31, but a 10x grind is still a dead PoW.
+Candidate ranking that follows: exact-binding lattice PCS (Ajtai/Greyhound
+class: a twiddled commitment has no known opening at all; transparent,
+post-quantum, linear prover) is the structurally clean candidate, with one
+open question, whether a ring-NTT commit over the m^2 coefficients fits the
+per-nonce budget; the FRI family needs a bespoke leaf-exactness construction
+to survive this role; KZG and Pedersen-class are exact but per-nonce MSM
+kills them for mining; plain commit-plus-spot-check (open k sampled entries,
+recompute from seed) has no global identity, so single-entry twiddles pass
+sampling with probability ~1 and it cannot stand alone. A sumcheck layer
+(Thaler's matmul protocol) composes with any commitment and shrinks what the
+PCS must open to a single point.
+
 ## Run
 
 ```
