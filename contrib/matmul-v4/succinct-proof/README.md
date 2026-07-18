@@ -166,6 +166,21 @@ eligibility-gate role fits the nonce loop with margin. Commitment is 4 KiB
 the on-chain footprint at profile D is ~54 KiB: commitment + opening +
 value, against 32 MiB raw.
 
+MEASURED on real silicon (RTX 5090, boost clocks; CUDA port of this exact
+commitment, cross-validated byte-identical against lattice_pc.py on a
+shared test vector). Per commit, two arms bracketing the production cost:
+
+| profile | A regenerated on the fly | A read from a precomputed table |
+|---------|--------------------------|---------------------------------|
+| C (m=1024) | 0.12 ms | 0.22 ms (256 MB table) |
+| D (m=2048) | 0.46 ms | 0.84 ms (1 GB table, 1.3 TB/s effective) |
+
+Both arms sit comfortably inside a realistic per-nonce budget at these
+dimensions. The memory arm runs at ~ the card's bandwidth ceiling, so the
+on-the-fly arm is the right production shape: ~1.8x faster and it removes
+the resident gigabyte; a hardened PRF for A lands between the two arms.
+The op-count estimate held up on silicon.
+
 ## Run
 
 ```
