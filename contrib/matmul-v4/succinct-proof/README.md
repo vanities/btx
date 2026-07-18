@@ -144,23 +144,37 @@ does force a full proof regeneration per grind try, capping the twiddle
 speedup near 10-20x instead of 2^31, but a 10x grind is still a dead PoW.
 Candidate ranking that follows: exact-binding lattice PCS (Ajtai/Greyhound
 class: a twiddled commitment has no known opening at all; transparent,
-post-quantum, linear prover) is the structurally clean candidate, with one
-open question, whether a ring-NTT commit over the m^2 coefficients fits the
-per-nonce budget; the FRI family needs a bespoke leaf-exactness construction
-to survive this role; KZG and Pedersen-class are exact but per-nonce MSM
-kills them for mining; plain commit-plus-spot-check (open k sampled entries,
-recompute from seed) has no global identity, so single-entry twiddles pass
-sampling with probability ~1 and it cannot stand alone. A sumcheck layer
-(Thaler's matmul protocol) composes with any commitment and shrinks what the
-PCS must open to a single point.
+post-quantum, linear prover) is the structurally clean candidate; the FRI
+family needs a bespoke leaf-exactness construction to survive this role; KZG
+and Pedersen-class are exact but per-nonce MSM kills them for mining; plain
+commit-plus-spot-check (open k sampled entries, recompute from seed) has no
+global identity, so single-entry twiddles pass sampling with probability ~1
+and it cannot stand alone. A sumcheck layer (Thaler's matmul protocol)
+composes with any commitment and shrinks what the PCS must open to a single
+point.
+
+The front-runner is now IN CODE here: `lattice_pc.py` implements the
+ring-Ajtai commitment for real (Dilithium's ring Z_8380417[X]/(X^256+1),
+NTT validated against schoolbook negacyclic multiplication, gadget
+decomposition to base-2^4 digits, seed-derived A, Z-linearity over digit
+vectors), exposed as `backend="lattice"` with the evaluation opening modeled
+at the literature's ~50 KB class. It answers the per-nonce budget question
+at op-count level: the commitment costs ~0.64x today's full-sketch digest
+hashing (independent 256-point NTTs, embarrassingly parallel), so the
+eligibility-gate role fits the nonce loop with margin. Commitment is 4 KiB
+(the header carries H(sigma || t), 32 bytes; t rides in the block body), so
+the on-chain footprint at profile D is ~54 KiB: commitment + opening +
+value, against 32 MiB raw.
 
 ## Run
 
 ```
 python3 succinct_matmul_pow.py   # self-check + decoupling table
 python3 adversarial_cost.py      # adversarial cost table (modeled + sampled)
-python3 test_succinct.py         # 23 tests: completeness, soundness, binding,
-                                 # decoupling, verifier-cost, adversarial cost
+python3 lattice_pc.py            # ring-Ajtai commitment self-check + op-count
+python3 test_succinct.py         # 29 tests: completeness, soundness, binding,
+                                 # decoupling, verifier-cost, adversarial cost,
+                                 # lattice backend
 ```
 
 No dependencies beyond the Python standard library.

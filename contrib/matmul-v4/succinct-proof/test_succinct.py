@@ -23,6 +23,13 @@
 #       measured against a real Merkle sampler, not just the formula);
 #       garbage-commit scanning and challenge grinding are priced out by
 #       Schwartz-Zippel even at theoretical-limit speedups.
+#   (h) LATTICE BACKEND: the exact-binding front-runner's commitment is REAL
+#       (ring-Ajtai over Dilithium's ring): NTT validated against schoolbook
+#       negacyclic multiplication, gadget roundtrip exact, commitment
+#       deterministic and sensitive to any single coefficient change,
+#       Z-linear over digit vectors, end-to-end prove/verify honest and
+#       tampered, and the per-nonce commit op-count sits in the same class
+#       as today's digest hashing.
 #   + GOLDEN vectors: pinned commitment/challenge/value hex at fixed
 #     headers, so any silent change to operand gen, Fiat-Shamir, or the
 #     evaluation fails loudly.
@@ -266,6 +273,71 @@ def test_challenge_grinding_unprofitable():
     import adversarial_cost as ac
     # Each grind costs at least the O(n^2) scalar; expected grinds 1/sz.
     assert ac.grinding_cost_ratio(4096, 2048) > 2 ** 30
+
+
+# ---------------------------------------------------------------------------
+# (h) LATTICE BACKEND
+# ---------------------------------------------------------------------------
+def test_lattice_ntt_matches_schoolbook_ring_mult():
+    # Proves the transform IS the negacyclic ring isomorphism (zeta table and
+    # both directions), not merely self-consistent.
+    import lattice_pc as lp
+    x = [(13 * i + 7) % lp.QP for i in range(lp.D)]
+    y = [(5 * i * i + 3) % lp.QP for i in range(lp.D)]
+    via_ntt = lp.intt([a * b % lp.QP for a, b in zip(lp.ntt(x), lp.ntt(y))])
+    assert via_ntt == lp.ring_mul_schoolbook(x, y)
+    assert lp.intt(lp.ntt(x)) == [v % lp.QP for v in x]
+
+
+def test_lattice_gadget_roundtrip_exact():
+    import lattice_pc as lp
+    coeffs = [(1 << 61) - 2, 0, 1, (1 << 60) + 12345, Q - 1, 987654321]
+    digits = lp.gadget_decompose(coeffs)
+    assert all(0 <= d < (1 << lp.GBITS) for d in digits)   # SIS-small
+    assert lp.gadget_recompose(digits) == coeffs
+
+
+def test_lattice_commit_deterministic_and_twiddle_sensitive():
+    import lattice_pc as lp
+    coeffs = [(3 * i + 1) % Q for i in range(128)]
+    t1 = lp.ajtai_commit(b"seed", coeffs)
+    assert lp.ajtai_commit(b"seed", coeffs) == t1          # deterministic
+    for pos in (0, 63, 127):
+        mod = list(coeffs)
+        mod[pos] = (mod[pos] + 1) % Q
+        assert lp.ajtai_commit(b"seed", mod) != t1, \
+            f"single-coefficient change at {pos} must change the commitment"
+
+
+def test_lattice_commit_linear_in_digit_vectors():
+    # The Z-linearity Greyhound-style evaluation proofs exploit:
+    # A*(g1 + g2) == A*g1 + A*g2 over the ring.
+    import lattice_pc as lp
+    g1 = [(7 * i) % 16 for i in range(1024)]
+    g2 = [(3 * i + 1) % 16 for i in range(1024)]
+    g_sum = [a + b for a, b in zip(g1, g2)]
+    t1 = lp.commit_t(b"seed", g1)
+    t2 = lp.commit_t(b"seed", g2)
+    ts = lp.commit_t(b"seed", g_sum)
+    for r in range(lp.NOUT):
+        for i in range(lp.D):
+            assert ts[r][i] == (t1[r][i] + t2[r][i]) % lp.QP
+
+
+def test_lattice_backend_end_to_end():
+    p = prove(HDR, SEED, n=24, m=8, backend="lattice")
+    assert len(p.commit) == 4096                            # real 4 KiB Ajtai t
+    assert verify(HDR, SEED, 24, 8, p)
+    bad = prove(HDR, SEED, n=24, m=8, backend="lattice", _tamper=_bump_one)
+    assert not verify(HDR, SEED, 24, 8, bad)
+
+
+def test_lattice_per_nonce_commit_in_digest_class():
+    import lattice_pc as lp
+    for m in (1024, 2048):
+        c = lp.per_nonce_cost_analysis(m)
+        assert c["ratio_vs_digest"] < 2.0, \
+            f"m={m}: NTT commit {c['ratio_vs_digest']:.2f}x digest hashing"
 
 
 # ---------------------------------------------------------------------------

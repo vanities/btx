@@ -314,6 +314,13 @@ class SuccinctProof:
         return len(self.commit) + FELT + self.opening.nbytes
 
 
+def _make_pc(backend: str):
+    if backend == "lattice":
+        from lattice_pc import LatticePC       # real ring-Ajtai commitment
+        return LatticePC()
+    return IdealPC(backend)                    # "fri" / "kzg" size models
+
+
 def prove(header: bytes, seed: bytes, n: int, m: int, backend: str = "fri",
           _tamper=None) -> SuccinctProof:
     """Honest miner. `_tamper(Chat)` is a test hook to commit to a WRONG sketch."""
@@ -321,7 +328,7 @@ def prove(header: bytes, seed: bytes, n: int, m: int, backend: str = "fri",
     Chat = compute_sketch(A, B, U, V)          # the real O(n^3) work
     if _tamper is not None:
         Chat = _tamper(Chat)
-    pc = IdealPC(backend)
+    pc = _make_pc(backend)
     commit = pc.commit(Chat)
     a, b = fiat_shamir_ab(header, commit)      # bound AFTER committing
     value, opening = pc.open(a, b)
@@ -331,7 +338,11 @@ def prove(header: bytes, seed: bytes, n: int, m: int, backend: str = "fri",
 def verify(header: bytes, seed: bytes, n: int, m: int, proof: SuccinctProof) -> bool:
     """Full node. Never receives Chat. O(n^2) operand work + one PCS opening check."""
     a, b = fiat_shamir_ab(header, proof.commit)
-    if not IdealPC.verify(proof.commit, a, b, proof.value, proof.opening):
+    ok = IdealPC.verify(proof.commit, a, b, proof.value, proof.opening)
+    if not ok and len(proof.commit) != 32:     # lattice commitments are 4 KiB
+        from lattice_pc import LatticePC
+        ok = LatticePC.verify(proof.commit, a, b, proof.value, proof.opening)
+    if not ok:
         return False                            # opening/binding failed
     A, B, U, V = regen_operands(seed, n, m)     # O(n^2)
     s_prime = verifier_side(A, B, U, V, a, b)   # O(n^2)
